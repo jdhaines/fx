@@ -93,3 +93,50 @@ the new fields must be **optional**.
      ```go
      --8<-- "parameter-objects/extend.go:consume"
      ```
+
+## Providing parameters in `fx.New` with `Supply`
+
+To make use of parameter ojects, you need to `Supply` them to the `fx.New` function.  A toy example is below.  Note the `fx.Supply` constructor and how that is used as a parameter to `NewHTTPServer`.
+
+```go
+package main
+
+// if using fx.Supply, we don't use the fx.In 
+type ServerParams struct {
+	// fx.In
+	Port int
+}
+
+func main() {
+	port := 3000
+	fx.New(
+		fx.Provide(NewHTTPServer),
+		fx.Supply(ServerParams{Port: port}),
+		fx.Invoke(func(server *http.Server) {
+		}),
+	).Run()
+}
+
+func NewHTTPServer(lc fx.Lifecycle, p ServerParams) *http.Server {
+	NewServer := &Server{}
+
+	// Declare Server config
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", p.Port),
+	}
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			ln, err := net.Listen("tcp", server.Addr)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Starting HTTP server at", server.Addr)
+			go server.Serve(ln)
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return server.Shutdown(ctx)
+		},
+	})
+	return server
+}
